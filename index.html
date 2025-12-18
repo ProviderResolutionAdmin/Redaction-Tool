@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Redaction Tool · Auto Names (V4)</title>
+<title>Redaction Tool</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root{
@@ -69,15 +69,15 @@
 <body>
 <div class="app">
   <div class="card">
-    <h1>PHI-Safe Redaction & Initials Tool</h1>
+    <h1>Redaction Tool</h1>
     <p class="subtitle">
-      Auto-detect names · Convert to initials (K.B. / S.H.) · Mask PHI · Save name list in your browser.
+      Features: Auto-detect names · Converts to initials · Masks PHI · Saves name list in your browser for repeated use. 
     </p>
 
     <div class="panel">
       <h3>1 · Original Text</h3>
       <textarea id="inputText" placeholder="Paste transcript here..."></textarea>
-      <p class="helper">You can paste very long transcripts. This runs entirely in your browser.</p>
+      <p class="helper">You can paste transcripts up to 5MB. This runs entirely in your browser.</p>
     </div>
 
     <div class="panel">
@@ -85,17 +85,17 @@
       <div class="controls" id="patternChips">
         <div class="chip selected" data-pattern="email">Emails</div>
         <div class="chip selected" data-pattern="phone">Phone Numbers</div>
-        <div class="chip selected" data-pattern="ssn">SSN-like IDs</div>
+        <div class="chip selected" data-pattern="ssn">SSN IDs</div>
         <div class="chip selected" data-pattern="dates">Dates</div>
         <div class="chip selected" data-pattern="money">Dollar Amounts</div>
-        <div class="chip" data-pattern="numbers">Long Numbers (8+ digits)</div>
+        <div class="chip" data-pattern="numbers">Numbers (8+ digits/DCNs)</div>
       </div>
-      <p class="helper">Matches are replaced with <code>████</code> so the structure and workflow are still readable.</p>
+      <p class="helper">Matched patterns are replaced with <code>████</code>. Select to turn off or on.</p>
     </div>
 
     <div class="panel">
       <h3>3 · Names → Initials (K.B. / S.H.)</h3>
-      <textarea id="namesList" placeholder="Detected names will appear here. You can also add your own, one per line."></textarea>
+      <textarea id="namesList" placeholder="Detected names from the test you pasted above will auto-populate HERE. If incorrect info is pulled in, just delete or modify the text. You can also add your own, one per line/or copy and paste."></textarea>
       <div class="controls">
         <button class="btn primary" id="btnSaveNames">Save Names</button>
         <button class="btn" id="btnDeleteNames">Delete Saved Names</button>
@@ -111,8 +111,8 @@
       <pre id="outputText">Your redacted text will appear here.</pre>
       <div class="controls">
         <button class="btn primary" id="btnRedact">Redact</button>
-        <button class="btn" id="btnCopy" disabled>Copy</button>
-        <button class="btn" id="btnClear">Clear Text (keeps saved names)</button>
+        <button class="btn" id="btnCopy" disabled>Copy Redacted Text</button>
+        <button class="btn" id="btnClear">Refresh Tool</button>
       </div>
       <div id="copyAlert" class="helper" style="display:none;color:#166534;">Redacted text copied to clipboard.</div>
     </div>
