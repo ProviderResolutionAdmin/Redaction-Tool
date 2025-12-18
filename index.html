@@ -1,0 +1,413 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PHI-Safe Redaction & Initials Tool · Auto Names (V4)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#f3f4f6;
+    --card:#ffffff;
+    --panel:#f9fafb;
+    --border:#d1d5db;
+    --text:#111827;
+    --muted:#6b7280;
+    --accent:#2563eb;
+    --accent-soft:#dbeafe;
+  }
+  body{
+    font-family:system-ui,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    margin:0;
+    padding:24px;
+    display:flex;
+    justify-content:center;
+  }
+  .app{max-width:1100px;width:100%;}
+  .card{
+    background:var(--card);
+    border:1px solid #e5e7eb;
+    border-radius:18px;
+    padding:24px;
+    box-shadow:0 20px 45px rgba(0,0,0,0.08);
+  }
+  h1{margin:0 0 4px 0;font-size:22px;color:var(--accent);}
+  .subtitle{margin:0 0 16px 0;font-size:13px;color:var(--muted);}
+  textarea{
+    width:100%;min-height:150px;padding:8px;border-radius:8px;
+    border:1px solid var(--border);background:white;font-size:13px;
+  }
+  textarea:focus{
+    outline:none;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-soft);
+  }
+  .panel{background:var(--panel);padding:14px;border-radius:12px;margin-bottom:12px;border:1px solid var(--border);}
+  .panel h3{margin:0 0 6px 0;font-size:13px;color:#4b5563;text-transform:uppercase;letter-spacing:0.06em;}
+  .controls{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+  .chip{
+    padding:6px 10px;border-radius:999px;border:1px solid var(--border);
+    background:#f3f4f6;font-size:11px;cursor:pointer;color:#374151;
+  }
+  .chip.selected{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+  .btn{
+    padding:8px 14px;border-radius:999px;border:1px solid var(--accent);
+    background:white;color:var(--accent);cursor:pointer;font-weight:600;font-size:13px;
+  }
+  .btn.primary{background:var(--accent);color:white;}
+  .btn:hover{filter:brightness(0.97);}
+  .btn.primary:hover{filter:brightness(0.94);}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;}
+  pre{
+    white-space:pre-wrap;background:white;padding:10px;border-radius:10px;
+    border:1px solid var(--border);min-height:150px;font-size:13px;
+  }
+  .helper{font-size:11px;color:var(--muted);margin-top:4px;}
+</style>
+</head>
+
+<body>
+<div class="app">
+  <div class="card">
+    <h1>PHI-Safe Redaction & Initials Tool</h1>
+    <p class="subtitle">
+      Auto-detect names · Convert to initials (K.B. / S.H.) · Mask PHI · Save name list in your browser.
+    </p>
+
+    <div class="panel">
+      <h3>1 · Original Text</h3>
+      <textarea id="inputText" placeholder="Paste transcript here..."></textarea>
+      <p class="helper">You can paste very long transcripts. This runs entirely in your browser.</p>
+    </div>
+
+    <div class="panel">
+      <h3>2 · Auto-Redact Patterns</h3>
+      <div class="controls" id="patternChips">
+        <div class="chip selected" data-pattern="email">Emails</div>
+        <div class="chip selected" data-pattern="phone">Phone Numbers</div>
+        <div class="chip selected" data-pattern="ssn">SSN-like IDs</div>
+        <div class="chip selected" data-pattern="dates">Dates</div>
+        <div class="chip selected" data-pattern="money">Dollar Amounts</div>
+        <div class="chip" data-pattern="numbers">Long Numbers (8+ digits)</div>
+      </div>
+      <p class="helper">Matches are replaced with <code>████</code> so the structure and workflow are still readable.</p>
+    </div>
+
+    <div class="panel">
+      <h3>3 · Names → Initials (K.B. / S.H.)</h3>
+      <textarea id="namesList" placeholder="Detected names will appear here. You can also add your own, one per line."></textarea>
+      <div class="controls">
+        <button class="btn primary" id="btnSaveNames">Save Names</button>
+        <button class="btn" id="btnDeleteNames">Delete Saved Names</button>
+      </div>
+      <p class="helper">
+        On Redact, the tool auto-detects likely names in the text and merges them into this list (no duplicates). Saved names are stored locally
+        and auto-load next time. They are only removed if you click “Delete Saved Names.”
+      </p>
+    </div>
+
+    <div class="panel">
+      <h3>4 · Redacted Output</h3>
+      <pre id="outputText">Your redacted text will appear here.</pre>
+      <div class="controls">
+        <button class="btn primary" id="btnRedact">Redact</button>
+        <button class="btn" id="btnCopy" disabled>Copy</button>
+        <button class="btn" id="btnClear">Clear Text (keeps saved names)</button>
+      </div>
+      <div id="copyAlert" class="helper" style="display:none;color:#166534;">Redacted text copied to clipboard.</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const inputEl = document.getElementById("inputText");
+  const namesEl = document.getElementById("namesList");
+  const outputEl = document.getElementById("outputText");
+  const btnCopy = document.getElementById("btnCopy");
+  const btnSaveNames = document.getElementById("btnSaveNames");
+  const btnDeleteNames = document.getElementById("btnDeleteNames");
+  const copyAlert = document.getElementById("copyAlert");
+
+  // Load saved names on startup
+  window.addEventListener("load", () => {
+    try{
+      const saved = localStorage.getItem("savedRedactionNames");
+      if(saved){
+        namesEl.value = saved;
+      }
+    }catch(e){
+      console.warn("localStorage not available", e);
+    }
+  });
+
+  // Save names
+  btnSaveNames.addEventListener("click", () => {
+    try{
+      localStorage.setItem("savedRedactionNames", namesEl.value);
+      alert("Names saved. They will auto-load next time.");
+    }catch(e){
+      alert("Could not save names (localStorage may be disabled).");
+    }
+  });
+
+  // Delete saved names
+  btnDeleteNames.addEventListener("click", () => {
+    if(!confirm("Delete all saved names?")) return;
+    try{
+      localStorage.removeItem("savedRedactionNames");
+    }catch(e){
+      console.warn(e);
+    }
+    namesEl.value = "";
+  });
+
+  // Pattern chips
+  const chips = document.querySelectorAll("#patternChips .chip");
+  chips.forEach(chip => chip.addEventListener("click", () => {
+    chip.classList.toggle("selected");
+  }));
+
+  function getSelectedPatterns(){
+    const active = [];
+    chips.forEach(ch => {
+      if(ch.classList.contains("selected")) active.push(ch.dataset.pattern);
+    });
+    return active;
+  }
+
+  function escapeRegExp(str){
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // --- Name detection from transcript ---
+  function detectNamesFromText(text){
+    const found = new Set();
+
+    // Pattern 1: Last, First M.
+    let regex = /\b([A-Z][a-z]+),\s+([A-Z][a-z]+)\s+([A-Z])\.?\b/g;
+    let m;
+    while((m = regex.exec(text)) !== null){
+      const last = m[1];
+      const first = m[2];
+      const mid = m[3];
+      found.add(first + " " + mid + ". " + last);
+    }
+
+    // Pattern 2: Last, First
+    regex = /\b([A-Z][a-z]+),\s+([A-Z][a-z]+)\b/g;
+    while((m = regex.exec(text)) !== null){
+      const last = m[1];
+      const first = m[2];
+      found.add(first + " " + last);
+    }
+
+    // Pattern 3: First M. Last
+    regex = /\b([A-Z][a-z]+)\s+([A-Z])\.\s+([A-Z][a-z]+)\b/g;
+    while((m = regex.exec(text)) !== null){
+      const first = m[1];
+      const mid = m[2];
+      const last = m[3];
+      found.add(first + " " + mid + ". " + last);
+    }
+
+    // Pattern 4: First Last
+    regex = /\b([A-Z][a-z]+)\s+([A-Z][a-z]+)\b/g;
+    while((m = regex.exec(text)) !== null){
+      const first = m[1];
+      const last = m[2];
+      const ignore = ["The","This","That","And","But","With","From","Next","Open","Close","Admin","Provider","Member","Plan","Claim","Case","Task"];
+      if(ignore.includes(first)) continue;
+      found.add(first + " " + last);
+    }
+
+    // Pattern 5: First R. (like Maria R.)
+    regex = /\b([A-Z][a-z]+)\s+([A-Z])\.\b/g;
+    while((m = regex.exec(text)) !== null){
+      const first = m[1];
+      const lastInit = m[2];
+      found.add(first + " " + lastInit + ".");
+    }
+
+    return Array.from(found);
+  }
+
+  function parseCanonicalName(line){
+    let trimmed = line.trim();
+    if(!trimmed) return null;
+
+    // "Last, First M."
+    let m = trimmed.match(/^([A-Z][a-z]+),\s+([A-Z][a-z]+)(?:\s+([A-Z])\.)?$/);
+    if(m){
+      const last = m[1];
+      const first = m[2];
+      const mid = m[3] || null;
+      return {first, middle: mid, last};
+    }
+
+    // "First M. Last"
+    m = trimmed.match(/^([A-Z][a-z]+)\s+([A-Z])\.\s+([A-Z][a-z]+)$/);
+    if(m){
+      return {first:m[1], middle:m[2], last:m[3]};
+    }
+
+    // "First Last"
+    m = trimmed.match(/^([A-Z][a-z]+)\s+([A-Z][a-z]+)$/);
+    if(m){
+      return {first:m[1], middle:null, last:m[2]};
+    }
+
+    // "First R."
+    m = trimmed.match(/^([A-Z][a-z]+)\s+([A-Z])\.$/);
+    if(m){
+      return {first:m[1], middle:m[2], last:null};
+    }
+
+    // Single word
+    m = trimmed.match(/^([A-Z][a-z]+)$/);
+    if(m){
+      return {first:m[1], middle:null, last:null};
+    }
+
+    return null;
+  }
+
+  function applyInitials(text){
+    const raw = (namesEl.value || "").trim();
+    if(!raw) return text;
+
+    let updated = text;
+    const lines = raw.split(/\r?\n/).map(n => n.trim()).filter(Boolean);
+
+    lines.forEach(line => {
+      const parsed = parseCanonicalName(line);
+      if(!parsed) return;
+      const first = parsed.first;
+      const mid = parsed.middle;
+      const last = parsed.last;
+
+      const fi = first ? first.charAt(0).toUpperCase() : "";
+      const mi = mid ? mid.charAt(0).toUpperCase() : "";
+      const li = last ? last.charAt(0).toUpperCase() : "";
+
+      let finalLabel = "";
+      if(fi && mi){
+        finalLabel = fi + "." + mi + ".";
+      }else if(fi && li){
+        finalLabel = fi + "." + li + ".";
+      }else if(fi){
+        finalLabel = fi + ".";
+      }else{
+        return;
+      }
+
+      const variants = [];
+
+      if(first && mid && last){
+        variants.push("\\b" + first + "\\s+" + mid + "\\.\s+" + last + "\\b");
+        variants.push("\\b" + last + ",\\s+" + first + "\\s+" + mid + "\\.?\\b");
+        variants.push("\\b" + first + "\\s+" + mid + "\\b");
+      }
+      if(first && last){
+        variants.push("\\b" + first + "\\s+" + last + "\\b");
+        variants.push("\\b" + last + ",\\s+" + first + "\\b");
+      }
+      if(first && mid && !last){
+        variants.push("\\b" + first + "\\s+" + mid + "\\.?\\b");
+      }
+      if(first){
+        variants.push("\\b" + first + "\\b");
+      }
+      if(last){
+        variants.push("\\b" + last + "\\b");
+      }
+
+      if(fi && mi){
+        variants.push("\\b" + fi + "\\.\\s*" + mi + "\\.\\b");
+        variants.push("\\b" + fi + mi + "\b");
+      }else if(fi && li){
+        variants.push("\\b" + fi + "\\.\\s*" + li + "\\.\\b");
+        variants.push("\\b" + fi + li + "\b");
+      }
+
+      variants.forEach(pattern => {
+        const re = new RegExp(pattern, "g");
+        updated = updated.replace(re, finalLabel);
+      });
+    });
+
+    return updated;
+  }
+
+  function mergeDetectedNamesIntoList(text){
+    const detected = detectNamesFromText(text);
+    const existingLines = (namesEl.value || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const set = new Set(existingLines);
+    detected.forEach(n => set.add(n));
+    namesEl.value = Array.from(set).join("\n");
+  }
+
+  function redact(){
+    let text = inputEl.value || "";
+    if(!text){
+      outputEl.textContent = "No text provided.";
+      btnCopy.disabled = true;
+      copyAlert.style.display = "none";
+      return;
+    }
+
+    // auto-detect names and merge into list
+    mergeDetectedNamesIntoList(text);
+
+    const patterns = getSelectedPatterns();
+    let out = text;
+    const R = "████";
+
+    if(patterns.includes("email")){
+      out = out.replace(/[\w._%+-]+@[\w.-]+\.[A-Za-z]{2,}/g, R);
+    }
+    if(patterns.includes("phone")){
+      out = out.replace(/(?:\+?1[-. ]?)?(?:\(\d{3}\)|\d{3})[-. ]?\d{3}[-. ]?\d{4}/g, R);
+    }
+    if(patterns.includes("ssn")){
+      out = out.replace(/\b\d{3}-\d{2}-\d{4}\b/g, R);
+    }
+    if(patterns.includes("dates")){
+      out = out.replace(/\b(?:\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/g, R);
+    }
+    if(patterns.includes("money")){
+      out = out.replace(/\$\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?/g, R);
+    }
+    if(patterns.includes("numbers")){
+      out = out.replace(/\b\d{8,}\b/g, R);
+    }
+
+    out = applyInitials(out);
+
+    outputEl.textContent = out;
+    btnCopy.disabled = false;
+    copyAlert.style.display = "none";
+  }
+
+  document.getElementById("btnRedact").addEventListener("click", redact);
+
+  document.getElementById("btnClear").addEventListener("click", () => {
+    inputEl.value = "";
+    outputEl.textContent = "Your redacted text will appear here.";
+    btnCopy.disabled = true;
+    copyAlert.style.display = "none";
+  });
+
+  btnCopy.addEventListener("click", () => {
+    const txt = outputEl.textContent || "";
+    if(!txt) return;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(() => {
+        copyAlert.style.display = "block";
+        setTimeout(() => { copyAlert.style.display = "none"; }, 1500);
+      });
+    }
+  });
+</script>
+</body>
+</html>
